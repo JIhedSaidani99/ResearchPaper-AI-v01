@@ -26,17 +26,18 @@ retrieval evaluation. For the technical walkthrough, see
 ## Table of contents
 
 1. [Features](#features)
-2. [Architecture](#architecture)
-3. [Project structure](#project-structure)
-4. [Quick start](#quick-start)
-5. [Document management](#document-management)
-6. [Research assistant](#research-assistant)
-7. [Research dashboard](#research-dashboard)
-8. [RAG evaluation](#rag-evaluation)
-9. [Limitations and next steps](#limitations-and-next-steps)
-10. [Tests](#tests)
-11. [RAG concepts](#rag-concepts)
-12. [License](#license)
+2. [Screenshots](#screenshots)
+3. [Architecture](#architecture)
+4. [Project structure](#project-structure)
+5. [Quick start](#quick-start)
+6. [Document management](#document-management)
+7. [Research assistant](#research-assistant)
+8. [Research dashboard](#research-dashboard)
+9. [RAG evaluation](#rag-evaluation)
+10. [Limitations and next steps](#limitations-and-next-steps)
+11. [Tests](#tests)
+12. [RAG concepts](#rag-concepts)
+13. [License](#license)
 
 ---
 
@@ -57,6 +58,22 @@ retrieval evaluation. For the technical walkthrough, see
   when it can be located.
 - Compare dense, hybrid, and reranked retrieval with the evaluation script and
   display the report in the research dashboard.
+
+## Screenshots
+
+### Research workspace
+
+The research workspace brings paper collection management, research tasks, the
+question interface, and the PDF preview together in one view.
+
+![Research workspace with collection controls, PDF upload and removal, research task selector, question interface, and paper preview](assets/screenshots/research-workspace.png)
+
+### Research dashboard
+
+The dashboard summarizes the selected collection, shows paper indexing status
+and recent questions, and provides a place to review retrieval benchmark results.
+
+![Research dashboard showing paper and index counts, per-paper indexing status, recent questions, and the retrieval benchmark area](assets/screenshots/research-dashboard.png)
 
 ## Architecture
 
