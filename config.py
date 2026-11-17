@@ -7,21 +7,26 @@ load_dotenv()
 
 # Paths
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 PDF_DIR = Path(os.getenv("PDF_DIR", BASE_DIR / "data" / "pdfs"))
 CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "data" / "chroma_db"))
 BM25_INDEX_PATH = Path(os.getenv("BM25_INDEX_PATH", BASE_DIR / "data" / "bm25_index.pkl"))
 DOCSTORE_PATH = Path(os.getenv("DOCSTORE_PATH", BASE_DIR / "data" / "docstore.pkl"))
 SKIPPED_LOG_PATH = Path(os.getenv("SKIPPED_LOG_PATH", BASE_DIR / "data" / "skipped_pdfs.json"))
+LIBRARY_DB_PATH = Path(os.getenv("LIBRARY_DB_PATH", BASE_DIR / "data" / "library.sqlite3"))
+INDEX_VERSIONS_DIR = DATA_DIR / "index_versions"
+INDEX_MANIFEST_PATH = DATA_DIR / "active_index.json"
+DEFAULT_COLLECTION_ID = "general"
 EVAL_DIR = BASE_DIR / "eval"
 
 for p in [PDF_DIR, CHROMA_DIR.parent]:
     p.mkdir(parents=True, exist_ok=True)
 
 
-# API keys / models (all free-tier)
+# Gemini API availability and quotas depend on the configured project and model.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
-# gemini-2.0-flash is fast+cheap(free)+good quality.
+# Override with GEMINI_MODEL when the configured model is unavailable or out of quota.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.1"))
 

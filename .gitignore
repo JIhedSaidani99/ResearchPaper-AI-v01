@@ -22,7 +22,10 @@ __pycache__/
 
 # Data / indexes (regenerate locally with scripts/build_index.py)
 data/pdfs/*.pdf
+data/pdfs/**/*.pdf
 data/chroma_db/
+data/index_versions/
+data/active_index.json
 data/bm25_index.pkl
 data/docstore.pkl
 data/skipped_pdfs.json

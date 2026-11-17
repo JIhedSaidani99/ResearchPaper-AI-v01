@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-import fitz  # PyMuPDF
+import pymupdf as fitz
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -50,7 +50,7 @@ def _guess_paper_title(doc: "fitz.Document", filename: str) -> str:
 
     try:
         page = doc[0]
-        blocks = page.get_text("dict")["blocks"]
+        blocks = page.get_textpage().extractDICT()["blocks"]
         best_text, best_size = "", 0.0
         for b in blocks:
             for line in b.get("lines", []):
@@ -69,7 +69,7 @@ def _guess_paper_title(doc: "fitz.Document", filename: str) -> str:
 def _extract_headings_per_page(page: "fitz.Page") -> str:
     """Return the largest-font text line on the page as a pseudo heading."""
     try:
-        blocks = page.get_text("dict")["blocks"]
+        blocks = page.get_textpage().extractDICT()["blocks"]
         best_text, best_size = "", 0.0
         for b in blocks:
             for line in b.get("lines", []):
@@ -88,8 +88,12 @@ def _extract_headings_per_page(page: "fitz.Page") -> str:
 def _extract_pages(pdf_path: Path) -> List[PageExtraction]:
     pages = []
     with fitz.open(pdf_path) as doc:
-        for i, page in enumerate(doc):
-            text = page.get_text("text") or ""
+        for i in range(doc.page_count):
+            page = doc.load_page(i)
+            extracted_text = page.get_text("text")
+            if not isinstance(extracted_text, str):
+                raise TypeError(f"Expected page text as a string, got {type(extracted_text).__name__}.")
+            text = extracted_text
             heading = _extract_headings_per_page(page)
             pages.append(PageExtraction(page_number=i + 1, text=text, heading=heading))
     return pages
@@ -113,11 +117,13 @@ def load_and_chunk_pdfs(pdf_dir: Path = config.PDF_DIR) -> List[Document]:
         chunk_size=config.CHUNK_SIZE,
         chunk_overlap=config.CHUNK_OVERLAP,
         separators=["\n\n", "\n", ". ", " ", ""],
+        add_start_index=True,
     )
 
     all_chunks: List[Document] = []
     skipped: List[dict] = []
-    pdf_paths = sorted(Path(pdf_dir).glob("*.pdf"))
+    root = Path(pdf_dir).resolve()
+    pdf_paths = sorted(root.rglob("*.pdf"))
 
     if not pdf_paths:
         logger.warning("No PDFs found in %s", pdf_dir)
@@ -128,20 +134,35 @@ def load_and_chunk_pdfs(pdf_dir: Path = config.PDF_DIR) -> List[Document]:
                 title = _guess_paper_title(doc, pdf_path.name)
             pages = _extract_pages(pdf_path)
         except Exception as e:  # noqa: BLE001
-            skipped.append({"file": pdf_path.name, "reason": f"failed to open/parse: {e}"})
+            skipped.append(
+                {
+                    "file": pdf_path.name,
+                    "source": str(pdf_path.resolve()),
+                    "reason": f"failed to open/parse: {e}",
+                }
+            )
             continue
 
         if _is_scanned(pages):
             skipped.append(
                 {
                     "file": pdf_path.name,
+                    "source": str(pdf_path.resolve()),
                     "reason": "appears to be a scanned/image-only PDF with little "
                     "or no extractable text (consider OCR-ing it first)",
                 }
             )
             continue
 
+        relative_path = pdf_path.resolve().relative_to(root)
+        collection_id = (
+            relative_path.parts[0]
+            if len(relative_path.parts) > 1
+            else config.DEFAULT_COLLECTION_ID
+        )
+        document_id = f"{collection_id}:{relative_path.as_posix()}"
         current_heading = title
+        document_chunk_index = 0
         for page in pages:
             if page.heading:
                 current_heading = page.heading
@@ -154,21 +175,25 @@ def load_and_chunk_pdfs(pdf_dir: Path = config.PDF_DIR) -> List[Document]:
             # chunk within its paper and section, boosting retrieval precision.
             context_header = f"[Paper: {title} | Section: {current_heading} | Page: {page.page_number}]\n"
 
-            splits = splitter.split_text(page.text)
-            for j, chunk_text in enumerate(splits):
+            page_chunks = splitter.create_documents([page.text])
+            for page_chunk in page_chunks:
                 all_chunks.append(
                     Document(
-                        page_content=context_header + chunk_text,
+                        page_content=context_header + page_chunk.page_content,
                         metadata={
                             "source": str(pdf_path),
                             "filename": pdf_path.name,
+                            "document_id": document_id,
+                            "collection_id": collection_id,
                             "paper_title": title,
                             "page": page.page_number,
                             "section": current_heading,
-                            "chunk_index": j,
+                            "chunk_index": document_chunk_index,
+                            "char_start_index": page_chunk.metadata.get("start_index", 0),
                         },
                     )
                 )
+                document_chunk_index += 1
 
     config.SKIPPED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(config.SKIPPED_LOG_PATH, "w") as f:

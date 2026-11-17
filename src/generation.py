@@ -10,16 +10,39 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from langchain_core.documents import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, Field
 
 import config
 
 logger = logging.getLogger(__name__)
 
 _llm = None
+
+AssistantTask = Literal["Ask", "Summary", "Contributions", "Limitations", "Compare methodologies"]
+
+TASK_INSTRUCTIONS = {
+    "Ask": "Answer the question directly.",
+    "Summary": (
+        "Write a concise, structured summary covering the research problem, approach, "
+        "main findings, and conclusion. Distinguish what the paper states from inference."
+    ),
+    "Contributions": (
+        "Extract the paper's explicit contributions. Do not invent novelty claims; "
+        "say when the supplied passages do not establish a contribution."
+    ),
+    "Limitations": (
+        "Identify limitations explicitly stated in the paper. If the context does not "
+        "state limitations, say so and keep any clearly labeled inference separate."
+    ),
+    "Compare methodologies": (
+        "Compare the selected papers' methods, data, evaluation, and stated trade-offs. "
+        "Use a concise table or bullets and do not infer missing details."
+    ),
+}
 
 
 def get_llm() -> ChatGoogleGenerativeAI:
@@ -29,6 +52,7 @@ def get_llm() -> ChatGoogleGenerativeAI:
             model=config.GEMINI_MODEL,
             temperature=config.GEMINI_TEMPERATURE,
             google_api_key=config.GOOGLE_API_KEY,
+            retries=0,
         )
     return _llm
 
@@ -79,11 +103,26 @@ def _extract_text(content) -> str:
     return str(content)
 
 
+class AnswerQualityScore(BaseModel):
+    faithfulness: int = Field(
+        ge=1,
+        le=5,
+        description="How well every factual claim is supported by the supplied context.",
+    )
+    answer_relevance: int = Field(
+        ge=1,
+        le=5,
+        description="How directly and completely the answer addresses the question.",
+    )
+    explanation: str = Field(description="Brief evidence-based explanation for the scores.")
+
+
 @dataclass
 class RagResult:
     answer: str
     citations: List[Dict] = field(default_factory=list)  # [{id, paper_title, page, source, snippet}]
     source_chunks: List[Document] = field(default_factory=list)
+    query_type: str | None = None
 
 
 def _format_context(docs: List[Document]) -> str:
@@ -107,7 +146,11 @@ def _build_citation_map(docs: List[Document]) -> Dict[str, Dict]:
     return mapping
 
 
-def generate_answer(question: str, docs: List[Document]) -> RagResult:
+def generate_answer(
+    question: str,
+    docs: List[Document],
+    task: AssistantTask = "Ask",
+) -> RagResult:
     if not docs:
         return RagResult(
             answer="I couldn't find relevant passages in the indexed papers to answer this. "
@@ -120,7 +163,10 @@ def generate_answer(question: str, docs: List[Document]) -> RagResult:
     llm = get_llm()
     context = _format_context(docs)
     messages = [
-        ("system", SYSTEM_PROMPT),
+        (
+            "system",
+            f"{SYSTEM_PROMPT}\n\nTask instructions: {TASK_INSTRUCTIONS[task]}",
+        ),
         ("human", USER_TEMPLATE.format(question=question, context=context)),
     ]
     response = llm.invoke(messages)
@@ -145,3 +191,62 @@ def generate_answer(question: str, docs: List[Document]) -> RagResult:
             dedup.append(c)
 
     return RagResult(answer=answer_text, citations=dedup, source_chunks=docs)
+
+
+def citation_correctness(answer: str, docs: List[Document]) -> dict[str, int | float]:
+    """Return citation precision against exact paper/page pairs in source chunks."""
+    valid_pairs = {
+        (
+            str(doc.metadata.get("paper_title", "")).strip(),
+            str(doc.metadata.get("page", "")),
+        )
+        for doc in docs
+    }
+    citations = [
+        (title.strip(), page)
+        for title, page in CITATION_PATTERN.findall(answer)
+    ]
+    correct = sum(pair in valid_pairs for pair in citations)
+    total = len(citations)
+    return {
+        "correct": correct,
+        "total": total,
+        "precision": correct / total if total else 0.0,
+    }
+
+
+def evaluate_answer_quality(
+    question: str,
+    answer: str,
+    docs: List[Document],
+) -> AnswerQualityScore:
+    """Score groundedness and relevance with a structured Gemini judge response."""
+    if not config.GOOGLE_API_KEY:
+        raise RuntimeError("GOOGLE_API_KEY is required for answer-quality evaluation.")
+    context = _format_context(docs)
+    judge = ChatGoogleGenerativeAI(
+        model=config.GEMINI_MODEL,
+        temperature=0,
+        google_api_key=config.GOOGLE_API_KEY,
+        retries=0,
+    ).with_structured_output(AnswerQualityScore)
+    result = judge.invoke(
+        [
+            (
+                "system",
+                "Evaluate the answer against the supplied context and question. "
+                "Score faithfulness and answer relevance from 1 (poor) to 5 (excellent). "
+                "Treat unsupported claims as unfaithful. Return only the requested schema.",
+            ),
+            (
+                "human",
+                f"Question:\n{question}\n\nAnswer:\n{answer}\n\n"
+                f"Retrieved evidence:\n{context}",
+            ),
+        ]
+    )
+    if isinstance(result, AnswerQualityScore):
+        return result
+    if isinstance(result, dict):
+        return AnswerQualityScore.model_validate(result)
+    raise TypeError("The answer-quality judge returned an unexpected response type.")

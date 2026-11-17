@@ -381,5 +381,38 @@
       "Shaoqing Ren",
       "Jian Sun"
     ]
+  },
+  {
+    "question": "In a model that feeds image patches to a Transformer, what positional representation is added to the patch embeddings?",
+    "expected_paper": "An Image is Worth 16x16 Words Transformers for Image Recognition at Scale",
+    "expected_answer_contains": ["learnable 1D position embeddings"],
+    "category": "architecture_paraphrase",
+    "difficulty": "hard"
+  },
+  {
+    "question": "Which training loss handles aligning image-derived features with character sequences when character-level segments are not provided?",
+    "expected_papers": [
+      "A Comprehensive Survey of Transformers in Text Recognition Techniques, Challenges, and Future Directions",
+      "AHWR‑Net: offline handwritten amharic word recognition using convolutional recurrent neural network"
+    ],
+    "expected_answer_contains": ["connectionist temporal classification", "CTC"],
+    "category": "cross_paper_alignment",
+    "difficulty": "hard"
+  },
+  {
+    "question": "How do a patch-sequence vision classifier and a CNN-RNN handwriting recognizer differ in their input representation and output handling?",
+    "expected_papers": [
+      "An Image is Worth 16x16 Words Transformers for Image Recognition at Scale",
+      "AHWR‑Net: offline handwritten amharic word recognition using convolutional recurrent neural network"
+    ],
+    "category": "cross_paper_comparison",
+    "difficulty": "hard"
+  },
+  {
+    "question": "For the Amharic handwriting system, which feature extractor and input size performed best, and what character and word error rates did it report?",
+    "expected_paper": "AHWR‑Net: offline handwritten amharic word recognition using convolutional recurrent neural network",
+    "expected_answer_contains": ["DenseNet-121", "64 × 256", "1.15%", "5.24%"],
+    "category": "multi_hop",
+    "difficulty": "hard"
   }
 ]
