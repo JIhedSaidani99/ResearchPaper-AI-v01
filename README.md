@@ -285,23 +285,4 @@ Run the unit and integration tests from the project root:
 python -m unittest discover -s tests -v
 ```
 
-## RAG concepts
 
-The implementation is informed by LangChain's
-[RAG From Scratch](https://github.com/langchain-ai/rag-from-scratch) notebooks.
-This table maps several concepts to their implementation in this project:
-
-| Concept | Where it is used |
-|---|---|---|
-| Indexing: extract, split, embed, and store | `src/ingestion.py`, `src/indexing.py` |
-| Hybrid retrieval and reciprocal-rank fusion | `src/retrieval.py` |
-| Query routing and comparison decomposition | `src/router.py`, `src/pipeline.py` |
-| Metadata filtering by collection and paper | `src/retrieval.py` |
-| Cross-Encoder reranking | `src/retrieval.py` |
-| Wider per-paper retrieval for summaries | `src/retrieval.py` |
-| Grounded generation and citation parsing | `src/generation.py` |
-
-## License
-
-No `LICENSE` file is currently included in this checkout. Add an appropriate
-license file before distributing the project if you intend to grant reuse rights.
